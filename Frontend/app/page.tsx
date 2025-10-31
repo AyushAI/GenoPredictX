@@ -1,5 +1,5 @@
 "use client"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Activity, Brain, Stethoscope, Phone, Shuffle } from "lucide-react"
 import Link from "next/link"
 import { TypewriterText } from "@/components/typewriter-text"
+import { useRouter } from "next/navigation"
 
 interface FormData {
   Type: string
@@ -141,6 +142,7 @@ const sampleVariants = [
 ]
 
 export default function HomePage() {
+  const router = useRouter()
   const [formData, setFormData] = useState<FormData>({
     Type: "",
     GeneSymbol: "",
@@ -156,6 +158,14 @@ export default function HomePage() {
   const [prediction, setPrediction] = useState<string>("")
   const [diseaseExplanation, setDiseaseExplanation] = useState<string>("")
   const [isLoading, setIsLoading] = useState(false)
+
+  useEffect(() => {
+    const userToken = sessionStorage.getItem("userToken")
+    const adminToken = sessionStorage.getItem("adminToken")
+    if (!userToken && !adminToken) {
+      router.push("/admin-login")
+    }
+  }, [router])
 
   const handleInputChange = (field: keyof FormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
