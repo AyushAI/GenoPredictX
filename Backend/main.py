@@ -1,8 +1,31 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import pickle
 import pandas as pd
+from typing import List, Dict
+from google import genai
+import logging
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+logger = logging.getLogger("gemini")
+logger.setLevel(logging.INFO)
+
+api_key = os.getenv("GEMINI_API_KEY")     
+client = None
+try:
+    if api_key:
+        client = genai.Client()
+        logger.info("✅ Gemini client successfully configured.")
+    else:
+        logger.warning("⚠️ GEMINI_API_KEY not found.")
+except Exception as e:
+    logger.error(f"❌ Error initializing Gemini client: {str(e)}")
+    client = None
 
 app = FastAPI()
 
@@ -16,7 +39,7 @@ app.add_middleware(
 )
 
 # Load the model
-with open(r"C:\Users\athar\OneDrive\Desktop\Atharva\DNA\GenoPredictX\ML Model\xgboost_genetics_model.pkl", "rb") as f:
+with open(r"D:\Atharva\GenoPredictX\Backend\xgboost_genetics_model.pkl", "rb") as f:
     model = pickle.load(f)
 
 # Define class labels manually - these are the actual phenotype names
@@ -52,6 +75,10 @@ class VariantInput(BaseModel):
     PositionVCF: int
     ReferenceAlleleVCF: str
     AlternateAlleleVCF: str
+
+class ChatRequest(BaseModel):
+    messages: List[Dict[str, str]]
+    phenotype: str
 
 # ----------------- Routes -----------------
 @app.get("/")
@@ -89,6 +116,48 @@ async def predict_variant(data: VariantInput):
         return {
             "error": f"Prediction failed: {str(e)}",
             "predicted_phenotype": "Error in prediction"
+        }
+
+@app.post("/chat")
+async def chat(data: ChatRequest):
+    try:
+        if client is None:
+            return {"error": "Gemini client not configured."}
+        
+        # Build the conversation history string
+        history_str = ""
+        for msg in data.messages[:-1]:  # Exclude the last (current) message
+            if msg["role"] == "user":
+                history_str += f"User: {msg['content']}\n"
+            else:
+                history_str += f"Assistant: {msg['content']}\n"
+        
+        current_message = data.messages[-1]["content"]
+        
+        # System prompt with instructions
+        system_prompt = f"""You are a helpful healthcare assistant specialized in genetic variants and phenotypes. 
+        The patient's predicted phenotype is: {data.phenotype}. 
+        Only answer questions related to healthcare, genetics, and this condition. 
+        Provide accurate, empathetic, and informative responses based on general medical knowledge. 
+        Always remind users to consult a healthcare professional for personalized advice.
+        If the query is not related to healthcare or genetics, respond exactly: 
+        "I'm sorry, but I can only assist with healthcare-related questions, particularly regarding genetic conditions."""
+        
+        # Full prompt
+        full_prompt = f"{system_prompt}\n\nPrevious conversation:\n{history_str}\nUser: {current_message}\nAssistant:"
+        
+        # Generate response
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=full_prompt
+        )
+        
+        return {"response": response.text}
+    
+    except Exception as e:
+        logger.error(f"Error in chat: {str(e)}")
+        return {
+            "error": f"Chat failed: {str(e)}"
         }
 
 # Optional: Add an endpoint to get available class labels

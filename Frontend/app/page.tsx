@@ -6,10 +6,13 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Activity, Brain, Stethoscope, Phone, Shuffle } from "lucide-react"
+import { Activity, Brain, Stethoscope, Phone, Shuffle, MessageCircle } from "lucide-react"
 import Link from "next/link"
 import { TypewriterText } from "@/components/typewriter-text"
 import { useRouter } from "next/navigation"
+import { Textarea } from "@/components/ui/textarea"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 
 interface FormData {
   Type: string
@@ -22,6 +25,11 @@ interface FormData {
   PositionVCF: string
   ReferenceAlleleVCF: string
   AlternateAlleleVCF: string
+}
+
+interface ChatMessage {
+  role: "user" | "assistant"
+  content: string
 }
 
 // Disease descriptions dictionary
@@ -141,6 +149,139 @@ const sampleVariants = [
   }
 ]
 
+function ChatCard({ phenotype, onClose }: { phenotype: string; onClose: () => void }) {
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [chatInput, setChatInput] = useState("")
+  const [chatLoading, setChatLoading] = useState(false)
+
+  const handleSend = async () => {
+    if (!chatInput.trim()) return
+    const userMsg: ChatMessage = { role: "user", content: chatInput }
+    setMessages((prev) => [...prev, userMsg])
+    setChatLoading(true)
+    setChatInput("")
+
+    try {
+      const res = await fetch("http://localhost:8000/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [...messages, userMsg],
+          phenotype,
+        }),
+      })
+      const data = await res.json()
+      if (data.error) {
+        setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${data.error}` }])
+      } else {
+        setMessages((prev) => [...prev, { role: "assistant", content: data.response }])
+      }
+    } catch (err) {
+      setMessages((prev) => [...prev, { role: "assistant", content: "Error: Could not connect to chat service." }])
+    }
+    setChatLoading(false)
+  }
+
+  const MarkdownRenderer = ({ content }: { content: string }) => (
+    <div className="prose prose-sm max-w-none prose-headings:text-foreground prose-a:text-primary prose-code:bg-muted/50 prose-blockquote:border-l-primary">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          // Custom styling to match shadcn/ui theme
+          p: ({ children }) => <p className="text-sm leading-relaxed mb-2 last:mb-0">{children}</p>,
+          ul: ({ children }) => <ul className="list-disc ml-4 text-sm leading-relaxed mb-2 last:mb-0">{children}</ul>,
+          ol: ({ children }) => <ol className="list-decimal ml-4 text-sm leading-relaxed mb-2 last:mb-0">{children}</ol>,
+          blockquote: ({ children }) => (
+            <blockquote className="border-l-4 border-primary pl-4 italic text-muted-foreground text-sm my-2">
+              {children}
+            </blockquote>
+          ),
+          code: ({ children, className }) => (
+            <code className={`bg-muted/50 px-1 py-0.5 rounded text-xs ${className || ''}`}>
+              {children}
+            </code>
+          ),
+          pre: ({ children }) => <pre className="bg-muted/20 p-3 rounded overflow-x-auto text-xs">{children}</pre>,
+          a: ({ children, href }) => (
+            <a href={href} className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">
+              {children}
+            </a>
+          ),
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  )
+
+  return (
+    <Card className="mb-8">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle className="flex items-center gap-2">
+            <MessageCircle className="h-5 w-5 text-primary" />
+            AI Health Chat
+          </CardTitle>
+          <CardDescription>
+            Ask questions about your predicted condition: {phenotype}
+          </CardDescription>
+        </div>
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          Close
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="h-96 overflow-y-auto space-y-4 p-4 bg-muted/50 rounded-lg border">
+          {messages.map((msg, i) => (
+            <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+              <div
+                className={`max-w-xs lg:max-w-md p-3 rounded-lg ${
+                  msg.role === "user" 
+                    ? "bg-primary text-primary-foreground" 
+                    : "bg-secondary text-foreground"
+                }`}
+              >
+                {msg.role === "assistant" ? (
+                  // Render Markdown for assistant responses
+                  <MarkdownRenderer content={msg.content} />
+                ) : (
+                  // Plain text for user messages
+                  <p className="text-sm">{msg.content}</p>
+                )}
+              </div>
+            </div>
+          ))}
+          {chatLoading && (
+            <div className="flex justify-start">
+              <div className="max-w-xs lg:max-w-md p-3 rounded-lg bg-secondary">
+                <p className="text-sm">Typing...</p>
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <Textarea
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault()
+                handleSend()
+              }
+            }}
+            placeholder="Ask about your condition, genetics, or related healthcare topics..."
+            className="flex-1 min-h-[40px] resize-none"
+            rows={1}
+          />
+          <Button onClick={handleSend} disabled={chatLoading || !chatInput.trim()} size="sm">
+            {chatLoading ? <Activity className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function HomePage() {
   const router = useRouter()
   const [formData, setFormData] = useState<FormData>({
@@ -156,8 +297,10 @@ export default function HomePage() {
     AlternateAlleleVCF: "",
   })
   const [prediction, setPrediction] = useState<string>("")
+  const [predictedPhenotype, setPredictedPhenotype] = useState<string>("")
   const [diseaseExplanation, setDiseaseExplanation] = useState<string>("")
   const [isLoading, setIsLoading] = useState(false)
+  const [showChat, setShowChat] = useState(false)
 
   useEffect(() => {
     const userToken = sessionStorage.getItem("userToken")
@@ -182,6 +325,8 @@ export default function HomePage() {
     // Clear previous predictions when loading new sample
     setPrediction("")
     setDiseaseExplanation("")
+    setPredictedPhenotype("")
+    setShowChat(false)
   }
 
   const handlePredict = async () => {
@@ -200,8 +345,10 @@ export default function HomePage() {
       if (data.error) {
         setPrediction(`Error: ${data.error}`)
         setDiseaseExplanation("")
+        setPredictedPhenotype("")
       } else {
         setPrediction(`Predicted Phenotype: ${data.predicted_phenotype}`)
+        setPredictedPhenotype(data.predicted_phenotype)
         
         // Get the appropriate description for the predicted phenotype
         const phenotypeName = data.predicted_phenotype
@@ -216,6 +363,7 @@ export default function HomePage() {
     } catch (err) {
       setPrediction("Error: Could not fetch prediction")
       setDiseaseExplanation("")
+      setPredictedPhenotype("")
     }
     setIsLoading(false)
   }
@@ -417,7 +565,20 @@ export default function HomePage() {
         </Card>
       )}
 
-      {prediction && (
+      {diseaseExplanation && !showChat && (
+        <div className="flex justify-center mb-8">
+          <Button onClick={() => setShowChat(true)} className="flex items-center gap-2">
+            <MessageCircle className="h-4 w-4" />
+            Start Chat with AI Assistant
+          </Button>
+        </div>
+      )}
+
+      {showChat && predictedPhenotype && (
+        <ChatCard phenotype={predictedPhenotype} onClose={() => setShowChat(false)} />
+      )}
+
+      {prediction && !showChat && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
