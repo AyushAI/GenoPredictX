@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Activity, Brain, Stethoscope, Phone, Shuffle, MessageCircle } from "lucide-react"
+import { Activity, Brain, Stethoscope, Phone, Shuffle, MessageCircle, Bot } from "lucide-react"
 import Link from "next/link"
 import { TypewriterText } from "@/components/typewriter-text"
 import { useRouter } from "next/navigation"
@@ -183,27 +183,26 @@ function ChatCard({ phenotype, onClose }: { phenotype: string; onClose: () => vo
   }
 
   const MarkdownRenderer = ({ content }: { content: string }) => (
-    <div className="prose prose-sm max-w-none prose-headings:text-foreground prose-a:text-primary prose-code:bg-muted/50 prose-blockquote:border-l-primary">
+    <div className="prose prose-sm max-w-none prose-headings:text-foreground prose-a:text-blue-500 prose-code:bg-blue-50 dark:prose-code:bg-blue-950/30 prose-blockquote:border-l-blue-500">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          // Custom styling to match shadcn/ui theme
           p: ({ children }) => <p className="text-sm leading-relaxed mb-2 last:mb-0">{children}</p>,
           ul: ({ children }) => <ul className="list-disc ml-4 text-sm leading-relaxed mb-2 last:mb-0">{children}</ul>,
           ol: ({ children }) => <ol className="list-decimal ml-4 text-sm leading-relaxed mb-2 last:mb-0">{children}</ol>,
           blockquote: ({ children }) => (
-            <blockquote className="border-l-4 border-primary pl-4 italic text-muted-foreground text-sm my-2">
+            <blockquote className="border-l-4 border-blue-500 pl-4 italic text-muted-foreground text-sm my-2">
               {children}
             </blockquote>
           ),
           code: ({ children, className }) => (
-            <code className={`bg-muted/50 px-1 py-0.5 rounded text-xs ${className || ''}`}>
+            <code className={`bg-blue-50 dark:bg-blue-950/30 text-blue-900 dark:text-blue-200 px-1.5 py-0.5 rounded text-xs font-mono ${className || ''}`}>
               {children}
             </code>
           ),
-          pre: ({ children }) => <pre className="bg-muted/20 p-3 rounded overflow-x-auto text-xs">{children}</pre>,
+          pre: ({ children }) => <pre className="bg-slate-900 text-slate-100 p-3 rounded overflow-x-auto text-xs">{children}</pre>,
           a: ({ children, href }) => (
-            <a href={href} className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">
+            <a href={href} className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 hover:underline font-medium" target="_blank" rel="noopener noreferrer">
               {children}
             </a>
           ),
@@ -215,34 +214,42 @@ function ChatCard({ phenotype, onClose }: { phenotype: string; onClose: () => vo
   )
 
   return (
-    <Card className="mb-8">
-      <CardHeader className="flex flex-row items-center justify-between">
+    <Card className="mb-8 border-0 bg-gradient-to-b from-blue-50 to-white dark:from-slate-950 dark:to-slate-900">
+      <CardHeader className="flex flex-row items-center justify-between pb-3">
         <div>
           <CardTitle className="flex items-center gap-2">
-            <MessageCircle className="h-5 w-5 text-primary" />
+            <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-1.5 rounded-lg">
+              <Bot className="h-5 w-5 text-white" />
+            </div>
             AI Health Chat
           </CardTitle>
           <CardDescription>
-            Ask questions about your predicted condition: {phenotype}
+            Ask questions about your predicted condition: <span className="font-semibold text-foreground">{phenotype}</span>
           </CardDescription>
         </div>
-        <Button variant="ghost" size="sm" onClick={onClose}>
+        <Button variant="ghost" size="sm" onClick={onClose} className="hover:bg-red-50 dark:hover:bg-red-950/20 hover:text-red-600">
           Close
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="h-96 overflow-y-auto space-y-4 p-4 bg-muted/50 rounded-lg border">
+        <div className="h-96 overflow-y-auto space-y-4 p-4 bg-white dark:bg-slate-900 rounded-xl border border-blue-200 dark:border-blue-900/30 shadow-sm">
           {messages.map((msg, i) => (
             <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+              {msg.role === "assistant" && (
+                <div className="flex-shrink-0 mr-2 mt-1">
+                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm">
+                    <Bot className="h-4 w-4 text-white" />
+                  </div>
+                </div>
+              )}
               <div
-                className={`max-w-xs lg:max-w-md p-3 rounded-lg ${
+                className={`max-w-xs lg:max-w-md px-4 py-3 rounded-lg transition-all ${
                   msg.role === "user" 
-                    ? "bg-primary text-primary-foreground" 
-                    : "bg-secondary text-foreground"
+                    ? "bg-blue-600 text-white rounded-br-none shadow-md" 
+                    : "bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/40 dark:to-blue-900/40 text-foreground rounded-bl-none border border-blue-200 dark:border-blue-800/50 shadow-sm"
                 }`}
               >
                 {msg.role === "assistant" ? (
-                  // Render Markdown for assistant responses
                   <MarkdownRenderer content={msg.content} />
                 ) : (
                   // Plain text for user messages
@@ -253,8 +260,13 @@ function ChatCard({ phenotype, onClose }: { phenotype: string; onClose: () => vo
           ))}
           {chatLoading && (
             <div className="flex justify-start">
-              <div className="max-w-xs lg:max-w-md p-3 rounded-lg bg-secondary">
-                <p className="text-sm">Typing...</p>
+              <div className="flex-shrink-0 mr-2">
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+                  <Activity className="h-4 w-4 text-white animate-spin" />
+                </div>
+              </div>
+              <div className="max-w-xs lg:max-w-md px-4 py-3 rounded-lg bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/40 dark:to-blue-900/40 border border-blue-200 dark:border-blue-800/50 rounded-bl-none">
+                <p className="text-sm text-muted-foreground">AI is thinking<span className="animate-pulse">...</span></p>
               </div>
             </div>
           )}
@@ -270,10 +282,10 @@ function ChatCard({ phenotype, onClose }: { phenotype: string; onClose: () => vo
               }
             }}
             placeholder="Ask about your condition, genetics, or related healthcare topics..."
-            className="flex-1 min-h-[40px] resize-none"
+            className="flex-1 min-h-[40px] resize-none border-blue-200 dark:border-blue-900/30 focus-visible:ring-blue-500"
             rows={1}
           />
-          <Button onClick={handleSend} disabled={chatLoading || !chatInput.trim()} size="sm">
+          <Button onClick={handleSend} disabled={chatLoading || !chatInput.trim()} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
             {chatLoading ? <Activity className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
           </Button>
         </div>
